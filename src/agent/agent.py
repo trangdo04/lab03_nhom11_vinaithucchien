@@ -50,32 +50,16 @@ class ReActAgent:
             [f"- {name}: {tool.description}" for name, tool in self.tools.items()]
         )
         
-        return f"""You are a medical assistant AI agent. Your goal is to help users with health-related questions.
+        return f"""Bạn là trợ lý y tế. Nhiệm vụ của bạn là giúp người dùng với các câu hỏi liên quan đến sức khỏe.
 
-You have access to the following tools:
+Bạn có quyền truy cập các công cụ sau:
 {tool_descriptions}
 
-Follow the ReAct format strictly:
-1. Thought: Think about what the user is asking and which tools might help
-2. Action: Use the tool in this format: Action: tool_name(argument)
-3. Observation: Record the results from the tool
-4. Repeat Thought/Action/Observation until you have enough information
-5. Final Answer: Provide a comprehensive response to the user
-
-Format example:
-Thought: The user is asking about symptoms. I should search for this information.
-Action: symptom_searching(fever and cough)
-Observation: [tool results]
-Thought: Now I need more information about treatment options.
-Action: general_searching(fever treatment)
-Observation: [tool results]
-Final Answer: Based on your symptoms...
-
-Important:
-- Medical information is for educational purposes only
-- Always recommend users consult healthcare professionals for serious concerns
-- Be clear about limitations of your knowledge
-- Use tools when you need specific information"""
+Quan trọng:
+- Thông tin chỉ mang tính tham khảo, không thay thế lời khuyên bác sĩ
+- Luôn nhắc người dùng tư vấn chuyên gia y tế nếu cần
+- Nói rõ giới hạn của thông tin
+- Dùng công cụ khi cần thông tin chuyên sâu"""
 
     def _parse_action(self, text: str) -> Optional[Dict[str, str]]:
         """
@@ -186,9 +170,9 @@ Important:
         # Build initial prompt with context
         current_prompt = f"""{history_context}
 
-User: {user_input}
+Người dùng: {user_input}
 
-Please help the user with their medical question. Follow the Thought-Action-Observation format carefully."""
+Vui lòng giúp người dùng với câu hỏi y tế của họ. Hãy tuân theo định dạng Thought-Action-Observation."""
         
         step = 0
         final_answer = None

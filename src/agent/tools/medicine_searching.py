@@ -1,16 +1,17 @@
 from typing import Dict, Any
 import os
-from tavily import TavilyClient
 from .tool_interface import MedicalTool
+from ..tavily_client import TavilyClient
+from src.telemetry.logger import logger
 
 
 class MedicineSearchingTool(MedicalTool):
-    """Tool for searching medicine and pharmaceutical information."""
+    """Công cụ tìm kiếm thông tin thuốc và dược phẩm."""
 
     def __init__(self):
         super().__init__(
             name="medicine_searching",
-            description="Search for information about medicines and their uses."
+            description="Tìm kiếm thông tin về thuốc, liều dùng, tác dụng phụ và chỉ định."
         )
         self.api_key = os.getenv("TAVILY_API_KEY")
         self.client = TavilyClient(api_key=self.api_key) if self.api_key else None
@@ -33,7 +34,7 @@ class MedicineSearchingTool(MedicalTool):
             if not self.client:
                 raise RuntimeError("TAVILY_API_KEY is not set in environment.")
 
-            search_query = f"medicine {normalized_query} uses dosage side effects"
+            search_query = f"thông tin thuốc {normalized_query} công dụng liều dùng tác dụng phụ"
 
             response = self.client.search(
                 query=search_query,
@@ -52,12 +53,13 @@ class MedicineSearchingTool(MedicalTool):
                 for r in results
             ]
 
+            logger.info(f"Medicine search: '{normalized_query}' -> {len(formatted_results)} results")
             return {
                 "status": "success",
                 "tool": self.name,
                 "query": normalized_query,
                 "data": formatted_results,
-                "message": f"Found {len(formatted_results)} results from Tavily"
+                "message": f"Tìm thấy {len(formatted_results)} kết quả về thuốc."
             }
 
         except (ValueError, RuntimeError) as e:
@@ -69,10 +71,11 @@ class MedicineSearchingTool(MedicalTool):
                 "message": str(e)
             }
         except Exception as e:
+            logger.error(f"Medicine search failed: {e}")
             return {
                 "status": "error",
                 "tool": self.name,
                 "query": (query or "").strip(),
                 "data": [],
-                "message": f"Tavily search failed: {e}"
+                "message": f"Lỗi khi tìm kiếm thông tin thuốc: {e}"
             }
