@@ -6,3 +6,4 @@ requests>=2.31.0
 pytest>=7.4.0
 streamlit>=1.0.0
 tavily>=0.1.0
+langgraph>=0.1.0
