@@ -37,14 +37,20 @@ class GeneralSearchingTool(MedicalTool):
 
         try:
             search_query = f"thông tin y tế chung {query}"
-            response = self.client.search(
-                query=search_query,
-                search_depth="advanced",
-                max_results=5
-            )
+            response = self.client.query(search_query)
 
-            results = response.get("results", [])
-            if not results:
+            if response.get("status") != "success":
+                return {
+                    "status": "error",
+                    "tool": self.name,
+                    "query": query,
+                    "data": [],
+                    "message": response.get("message", "Lỗi từ Tavily.")
+                }
+
+            data = response.get("data", [])
+            results = data if isinstance(data, list) else [data]
+            if not results or all(not item for item in results):
                 return {
                     "status": "success",
                     "tool": self.name,
@@ -55,11 +61,14 @@ class GeneralSearchingTool(MedicalTool):
 
             extracted: List[Dict[str, str]] = []
             for item in results:
-                extracted.append({
-                    "title": item.get("title", ""),
-                    "snippet": item.get("content", ""),
-                    "url": item.get("url", "")
-                })
+                if isinstance(item, dict):
+                    extracted.append({
+                        "title": item.get("title", ""),
+                        "snippet": item.get("content", ""),
+                        "url": item.get("url", "")
+                    })
+                else:
+                    extracted.append({"title": "Kết quả tổng hợp", "snippet": str(item), "url": ""})
 
             logger.info(f"General search: '{query}' -> {len(extracted)} results")
             return {

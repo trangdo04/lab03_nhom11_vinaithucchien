@@ -36,22 +36,34 @@ class MedicineSearchingTool(MedicalTool):
 
             search_query = f"thông tin thuốc {normalized_query} công dụng liều dùng tác dụng phụ"
 
-            response = self.client.search(
-                query=search_query,
-                search_depth="advanced",
-                max_results=5
-            )
+            response = self.client.query(search_query)
 
-            results = response.get("results", [])
-
-            formatted_results = [
-                {
-                    "title": (r.get("title") or "").strip(),
-                    "url": (r.get("url") or "").strip(),
-                    "content": (r.get("content") or "").strip()[:1000]
+            if response.get("status") != "success":
+                return {
+                    "status": "error",
+                    "tool": self.name,
+                    "query": normalized_query,
+                    "data": [],
+                    "message": response.get("message", "Lỗi từ Tavily.")
                 }
-                for r in results
-            ]
+
+            data = response.get("data", [])
+            results = data if isinstance(data, list) else [data]
+
+            formatted_results = []
+            for r in results:
+                if isinstance(r, dict):
+                    formatted_results.append({
+                        "title": (r.get("title") or "").strip(),
+                        "url": (r.get("url") or "").strip(),
+                        "content": (r.get("content") or "").strip()[:1000]
+                    })
+                else:
+                    formatted_results.append({
+                        "title": "Kết quả thuốc",
+                        "url": "",
+                        "content": str(r)[:1000]
+                    })
 
             logger.info(f"Medicine search: '{normalized_query}' -> {len(formatted_results)} results")
             return {

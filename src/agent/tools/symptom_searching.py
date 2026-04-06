@@ -46,28 +46,38 @@ class SymptomSearchingTool(MedicalTool):
 
         try:
             enhanced_query = f"triệu chứng bệnh {query} nguyên nhân điều trị"
-            response = self.client.search(
-                query=enhanced_query,
-                max_results=10,
-                include_answer=True
-            )
+            response = self.client.query(enhanced_query)
 
-            results = []
-            for item in response.get("results", []):
-                results.append({
-                    "title": item.get("title", ""),
-                    "url": item.get("url", ""),
-                    "content": item.get("content", "")
-                })
+            if response.get("status") != "success":
+                return {
+                    "status": "error",
+                    "tool": self.name,
+                    "query": query,
+                    "data": [],
+                    "message": response.get("message", "Lỗi từ Tavily.")
+                }
 
-            logger.info(f"Symptom search: '{query}' -> {len(results)} results")
+            data = response.get("data", [])
+            results = data if isinstance(data, list) else [data]
+            extracted = []
+            for item in results:
+                if isinstance(item, dict):
+                    extracted.append({
+                        "title": item.get("title", ""),
+                        "url": item.get("url", ""),
+                        "content": item.get("content", "")
+                    })
+                else:
+                    extracted.append({"title": "Kết quả triệu chứng", "url": "", "content": str(item)})
+
+            logger.info(f"Symptom search: '{query}' -> {len(extracted)} results")
             return {
                 "status": "success",
                 "tool": self.name,
                 "query": query,
-                "data": results,
-                "message": f"Tìm thấy {len(results)} kết quả liên quan đến triệu chứng.",
-                "answer": response.get("answer", "")
+                "data": extracted,
+                "message": f"Tìm thấy {len(extracted)} kết quả liên quan đến triệu chứng.",
+                "answer": response.get("data", "")
             }
         except Exception as exc:
             logger.error(f"Symptom search failed: {exc}")

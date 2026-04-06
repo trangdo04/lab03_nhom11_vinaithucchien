@@ -77,6 +77,10 @@ class TavilyClient:
             "message": f"Tavily request failed for all endpoints. Last error: {last_error}"
         }
 
+    def search(self, query: str, **kwargs) -> Dict[str, Any]:
+        """Backward-compatible alias for query()."""
+        return self.query(query)
+
     def _extract_data(self, result_json: Dict[str, Any]) -> Any:
         if not isinstance(result_json, dict):
             return result_json

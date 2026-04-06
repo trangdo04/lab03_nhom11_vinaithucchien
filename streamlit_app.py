@@ -7,7 +7,7 @@ st.set_page_config(page_title="Medical Agent Comparison", page_icon="💊", layo
 st.title("So sánh hai agent y tế")
 st.write("Nhập câu hỏi y tế và so sánh câu trả lời của hai agent cùng lúc.")
 
-if "react_agent" not in st.session_state or "enhanced_agent" not in st.session_state:
+def _initialize_agents() -> None:
     try:
         llm = Config.get_llm_provider()
         tools = Config.get_tools()
@@ -22,10 +22,15 @@ if "react_agent" not in st.session_state or "enhanced_agent" not in st.session_s
             tools=tools,
             max_steps=Config.MAX_AGENT_STEPS
         )
-        st.session_state.messages = []
     except Exception as exc:
         st.error(f"Không thể khởi tạo agent: {exc}")
         st.stop()
+
+if "react_agent" not in st.session_state or st.session_state.get("react_agent") is None:
+    _initialize_agents()
+
+if "enhanced_agent" not in st.session_state or st.session_state.get("enhanced_agent") is None:
+    _initialize_agents()
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -45,9 +50,11 @@ if submit and user_input.strip():
 
 if st.button("Xoá lịch sử chat"):
     st.session_state.messages = []
-    st.session_state.react_agent = None
-    st.session_state.enhanced_agent = None
-    st.experimental_rerun()
+    if "react_agent" in st.session_state:
+        del st.session_state["react_agent"]
+    if "enhanced_agent" in st.session_state:
+        del st.session_state["enhanced_agent"]
+    st.experimental_rerun() if hasattr(st, "experimental_rerun") else None
 
 for idx, item in enumerate(st.session_state.messages, start=1):
     st.markdown(f"### {idx}. Câu hỏi: {item['user']}")
