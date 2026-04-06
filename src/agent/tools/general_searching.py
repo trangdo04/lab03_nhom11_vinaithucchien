@@ -11,7 +11,7 @@ class GeneralSearchingTool(MedicalTool):
     def __init__(self):
         super().__init__(
             name="general_searching",
-            description="Tìm kiếm thông tin y tế tổng quát, điều kiện, điều trị và kiến thức sức khỏe."
+            description="Tìm kiếm thông tin chung chung."
         )
         self.api_key = os.getenv("TAVILY_API_KEY")
         self.client = TavilyClient(api_key=self.api_key) if self.api_key else None
@@ -40,7 +40,7 @@ class GeneralSearchingTool(MedicalTool):
             }
 
         try:
-            search_query = f"thông tin y tế chung {query}"
+            search_query = f"thông tin chung {query}"
             response = self.client.query(search_query)
 
             if response.get("status") != "success":
