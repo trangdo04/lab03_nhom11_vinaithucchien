@@ -9,7 +9,7 @@ class TavilyClient:
 
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
         self.api_key = api_key or os.getenv("TAVILY_API_KEY")
-        self.base_url = base_url or os.getenv("TAVILY_BASE_URL", "https://api.tavily.ai/v1")
+        self.base_url = base_url or "https://api.tavily.com/search"
 
     def query(self, query: str) -> Dict[str, Any]:
         if not self.api_key:
@@ -21,60 +21,50 @@ class TavilyClient:
                 "message": "TAVILY_API_KEY is not set in environment variables."
             }
 
-        endpoints = ["/query", "/search", "/answer", "/responses"]
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+        payload = {
+            "api_key": self.api_key,
+            "query": query,
+            "search_depth": "advanced",
+            "max_results": 5
         }
-        payload = {"query": query}
-        last_error = None
 
-        for endpoint in endpoints:
-            url = f"{self.base_url}{endpoint}"
-            try:
-                response = requests.post(url, json=payload, headers=headers, timeout=20)
-                if response.status_code == 401:
-                    return {
-                        "status": "error",
-                        "tool": "tavily",
-                        "query": query,
-                        "data": None,
-                        "message": "Tavily authentication failed. Check TAVILY_API_KEY."
-                    }
-                if response.status_code in (404, 405, 400):
-                    last_error = f"Endpoint {url} returned {response.status_code}."
-                    continue
-                response.raise_for_status()
-                result_json = response.json()
-            except requests.RequestException as exc:
-                last_error = str(exc)
-                continue
-            except ValueError:
+        try:
+            response = requests.post(self.base_url, json=payload, timeout=30)
+            if response.status_code == 401:
                 return {
                     "status": "error",
                     "tool": "tavily",
                     "query": query,
                     "data": None,
-                    "message": "Tavily response could not be parsed as JSON."
+                    "message": "Tavily authentication failed. Check TAVILY_API_KEY."
                 }
-
-            data = self._extract_data(result_json)
+            response.raise_for_status()
+            result_json = response.json()
+        except requests.RequestException as exc:
             return {
-                "status": "success",
+                "status": "error",
                 "tool": "tavily",
                 "query": query,
-                "data": data,
-                "message": f"Tavily query completed successfully via {endpoint}.",
-                "raw_response": result_json,
-                "endpoint": endpoint
+                "data": None,
+                "message": f"Tavily request failed: {str(exc)}"
+            }
+        except ValueError:
+            return {
+                "status": "error",
+                "tool": "tavily",
+                "query": query,
+                "data": None,
+                "message": "Tavily response could not be parsed as JSON."
             }
 
+        data = self._extract_data(result_json)
         return {
-            "status": "error",
+            "status": "success",
             "tool": "tavily",
             "query": query,
-            "data": None,
-            "message": f"Tavily request failed for all endpoints. Last error: {last_error}"
+            "data": data,
+            "message": "Tavily query completed successfully.",
+            "raw_response": result_json
         }
 
     def search(self, query: str, **kwargs) -> Dict[str, Any]:

@@ -17,6 +17,10 @@ class GeneralSearchingTool(MedicalTool):
         self.client = TavilyClient(api_key=self.api_key) if self.api_key else None
 
     def execute(self, query: str) -> Dict[str, Any]:
+        logger.log_event("TOOL_START", {
+            "tool": self.name,
+            "query_preview": (query or "")[:200]
+        })
         if not query or not query.strip():
             return {
                 "status": "error",
@@ -71,6 +75,12 @@ class GeneralSearchingTool(MedicalTool):
                     extracted.append({"title": "Kết quả tổng hợp", "snippet": str(item), "url": ""})
 
             logger.info(f"General search: '{query}' -> {len(extracted)} results")
+            logger.log_event("TOOL_RESULT", {
+                "tool": self.name,
+                "status": "success",
+                "query": query,
+                "result_count": len(extracted)
+            })
             return {
                 "status": "success",
                 "tool": self.name,
@@ -80,6 +90,12 @@ class GeneralSearchingTool(MedicalTool):
             }
         except Exception as exc:
             logger.error(f"General search failed: {exc}")
+            logger.log_event("TOOL_RESULT", {
+                "tool": self.name,
+                "status": "error",
+                "query": query,
+                "message": str(exc)
+            })
             return {
                 "status": "error",
                 "tool": self.name,

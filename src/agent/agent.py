@@ -59,7 +59,13 @@ Quan trọng:
 - Thông tin chỉ mang tính tham khảo, không thay thế lời khuyên bác sĩ
 - Luôn nhắc người dùng tư vấn chuyên gia y tế nếu cần
 - Nói rõ giới hạn của thông tin
-- Dùng công cụ khi cần thông tin chuyên sâu"""
+- Dùng công cụ khi cần thông tin chuyên sâu
+
+Định dạng phản hồi:
+Thought: <suy nghĩ>
+Action: <tên_công_cụ>(<truy_vấn>)
+Observation: <kết quả công cụ>
+Final Answer: <câu trả lời cuối cùng>"""
 
     def _parse_action(self, text: str) -> Optional[Dict[str, str]]:
         """
@@ -126,7 +132,9 @@ Quan trọng:
             # Format result for LLM context
             if result.get("status") == "success":
                 observation = f"Tool '{tool_name}' result:\n"
-                if result.get("data"):
+                if result.get("answer"):
+                    observation += str(result["answer"])
+                elif result.get("data"):
                     observation += str(result["data"])
                 else:
                     observation += result.get("message", "No data returned")
@@ -179,6 +187,11 @@ Vui lòng giúp người dùng với câu hỏi y tế của họ. Hãy tuân th
         
         # ReAct loop: Thought-Action-Observation
         while step < self.max_steps and final_answer is None:
+            logger.log_event("AGENT_STEP", {
+                "step": step + 1,
+                "prompt_length": len(current_prompt),
+                "available_tools": list(self.tools.keys())
+            })
             # Generate LLM response
             response = self.llm.generate(
                 prompt=current_prompt,
@@ -186,6 +199,11 @@ Vui lòng giúp người dùng với câu hỏi y tế của họ. Hãy tuân th
             )
             
             llm_content = response.get("content", "")
+            logger.log_event("AGENT_RESPONSE", {
+                "step": step + 1,
+                "llm_content_preview": llm_content[:200]
+            })
+            self.history.add_message("assistant", llm_content)
             
             # Try to extract Final Answer
             final_answer = self._extract_final_answer(llm_content)
@@ -200,6 +218,11 @@ Vui lòng giúp người dùng với câu hỏi y tế của họ. Hãy tuân th
             if action:
                 tool_name = action["tool_name"]
                 argument = action["argument"]
+                logger.log_event("AGENT_ACTION", {
+                    "step": step + 1,
+                    "tool_name": tool_name,
+                    "argument_preview": argument[:200]
+                })
                 
                 # Execute the tool
                 observation = self._execute_tool(tool_name, argument)
@@ -227,8 +250,11 @@ Vui lòng giúp người dùng với câu hỏi y tế của họ. Hãy tuân th
         # Fallback if we didn't get a final answer
         if final_answer is None:
             final_answer = "I encountered an issue generating a response. Please try again or provide more details."
-        
-        # Do not save assistant responses to history to reduce token usage
+        logger.log_event("AGENT_FINAL", {
+            "steps": step,
+            "final_answer_preview": final_answer[:200],
+            "has_final_answer": final_answer is not None
+        })
         logger.log_event("AGENT_END", {
             "steps": step,
             "answer_length": len(final_answer),

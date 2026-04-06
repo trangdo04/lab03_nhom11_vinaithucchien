@@ -26,6 +26,10 @@ class SymptomSearchingTool(MedicalTool):
         Returns:
             Kết quả tìm kiếm theo định dạng chung.
         """
+        logger.log_event("TOOL_START", {
+            "tool": self.name,
+            "query_preview": (query or "")[:200]
+        })
         if not query or not query.strip():
             return {
                 "status": "error",
@@ -71,6 +75,12 @@ class SymptomSearchingTool(MedicalTool):
                     extracted.append({"title": "Kết quả triệu chứng", "url": "", "content": str(item)})
 
             logger.info(f"Symptom search: '{query}' -> {len(extracted)} results")
+            logger.log_event("TOOL_RESULT", {
+                "tool": self.name,
+                "status": "success",
+                "query": query,
+                "result_count": len(extracted)
+            })
             return {
                 "status": "success",
                 "tool": self.name,
@@ -81,6 +91,12 @@ class SymptomSearchingTool(MedicalTool):
             }
         except Exception as exc:
             logger.error(f"Symptom search failed: {exc}")
+            logger.log_event("TOOL_RESULT", {
+                "tool": self.name,
+                "status": "error",
+                "query": query,
+                "message": str(exc)
+            })
             return {
                 "status": "error",
                 "tool": self.name,

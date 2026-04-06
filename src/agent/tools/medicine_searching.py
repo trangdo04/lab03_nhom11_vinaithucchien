@@ -26,6 +26,10 @@ class MedicineSearchingTool(MedicalTool):
         Returns:
             Dict with tool execution result.
         """
+        logger.log_event("TOOL_START", {
+            "tool": self.name,
+            "query_preview": (query or "")[:200]
+        })
         try:
             normalized_query = (query or "").strip()
             if not normalized_query:
@@ -66,6 +70,12 @@ class MedicineSearchingTool(MedicalTool):
                     })
 
             logger.info(f"Medicine search: '{normalized_query}' -> {len(formatted_results)} results")
+            logger.log_event("TOOL_RESULT", {
+                "tool": self.name,
+                "status": "success",
+                "query": normalized_query,
+                "result_count": len(formatted_results)
+            })
             return {
                 "status": "success",
                 "tool": self.name,
@@ -75,6 +85,12 @@ class MedicineSearchingTool(MedicalTool):
             }
 
         except (ValueError, RuntimeError) as e:
+            logger.log_event("TOOL_RESULT", {
+                "tool": self.name,
+                "status": "error",
+                "query": (query or "").strip(),
+                "message": str(e)
+            })
             return {
                 "status": "error",
                 "tool": self.name,
@@ -84,6 +100,12 @@ class MedicineSearchingTool(MedicalTool):
             }
         except Exception as e:
             logger.error(f"Medicine search failed: {e}")
+            logger.log_event("TOOL_RESULT", {
+                "tool": self.name,
+                "status": "error",
+                "query": (query or "").strip(),
+                "message": str(e)
+            })
             return {
                 "status": "error",
                 "tool": self.name,

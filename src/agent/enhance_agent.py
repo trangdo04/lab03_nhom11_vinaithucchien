@@ -133,7 +133,13 @@ class EnhancedAgent:
     def _general_mode(self, user_input: str) -> str:
         if "general_searching" in self.tools:
             result = self.tools["general_searching"].execute(user_input)
-            if result.get("status") == "success" and result.get("data"):
+            logger.log_event("ENHANCED_GENERAL_SEARCH", {
+                "query": user_input,
+                "status": result.get("status"),
+                "data_preview": str(result.get("data") or result.get("answer"))[:300],
+                "message": result.get("message")
+            })
+            if result.get("status") == "success" and (result.get("data") or result.get("answer")):
                 return self._format_tool_response(result)
         prompt = (
             "Bạn là trợ lý chung. Hãy trả lời câu hỏi này rõ ràng và ngắn gọn.\n"
@@ -147,14 +153,22 @@ class EnhancedAgent:
         for tool_name in ["symptom_searching", "medicine_searching", "general_searching"]:
             if tool_name in self.tools:
                 result = self.tools[tool_name].execute(user_input)
+                logger.log_event("ENHANCED_TOOL_RESULT", {
+                    "tool": tool_name,
+                    "status": result.get("status"),
+                    "query": user_input,
+                    "message": result.get("message"),
+                    "data_preview": str(result.get("data") or result.get("answer"))[:300]
+                })
                 if result.get("status") == "success":
                     collected.append(self._format_tool_response(result))
+                    break
                 else:
                     collected.append(f"{tool_name}: {result.get('message', 'tool error')}")
         return collected
 
     def _format_tool_response(self, result: Dict[str, Any]) -> str:
-        data = result.get("data")
+        data = result.get("data") or result.get("answer")
         if isinstance(data, (list, dict)):
             try:
                 data = json.dumps(data, ensure_ascii=False)
@@ -165,6 +179,7 @@ class EnhancedAgent:
     def _has_sufficient_information(self, user_input: str, observations: List[str]) -> bool:
         prompt = (
             "Bạn là trợ lý y tế. Hãy xác định xem thông tin hiện có có đủ để đưa ra gợi ý y tế thận trọng hay không.\n"
+            "Nếu có thể, hãy ưu tiên kết luận thận trọng thay vì tiếp tục hỏi thêm.\n"
             "Chỉ trả lời YES hoặc NO.\n"
             f"Câu hỏi của người dùng: {user_input}\n"
             f"Các quan sát:\n{chr(10).join(observations)}\n"
@@ -172,15 +187,19 @@ class EnhancedAgent:
         )
         response = self.llm.generate(prompt=prompt)
         content = response.get("content", "").strip().lower()
+        logger.log_event("ENHANCED_INFO_CHECK", {
+            "content_preview": content[:300],
+            "observations_count": len(observations)
+        })
         if "yes" in content or "có" in content:
             return True
         if "no" in content or "không" in content:
             return False
-        return len(observations) >= 2
+        return len(observations) >= 1
 
     def _predict_node(self, user_input: str, observations: List[str]) -> str:
         prompt = (
-            "Bạn là trợ lý y tế. Dùng câu hỏi và các quan sát sau để cung cấp câu trả lời cẩn trọng và an toàn. "
+            "Bạn là trợ lý y tế. Dùng câu hỏi và các quan sát sau để cung cấp câu trả lời cẩn trọng, ngắn gọn và kết luận nhanh. "
             "Hãy rõ ràng rằng đây không phải là tư vấn y tế chính thức và khuyến nghị tham khảo chuyên gia nếu cần.\n\n"
             f"Câu hỏi của người dùng: {user_input}\n"
             f"Các quan sát:\n{chr(10).join(observations)}\n"
@@ -193,9 +212,10 @@ class EnhancedAgent:
         prompt = (
             "Bạn là trợ lý y tế, cần hỏi lại để làm rõ thông tin. "
             "Người dùng đã hỏi câu hỏi y tế nhưng cần thêm chi tiết.\n"
+            "Chỉ hỏi lại khi thực sự cần thiết. Nếu có thể, hãy trả lời thận trọng và kết luận thay vì kéo dài cuộc hội thoại.\n"
             f"Câu hỏi của người dùng: {user_input}\n"
             f"Các quan sát:\n{chr(10).join(observations)}\n"
-            "Hãy đưa ra một câu hỏi follow-up ngắn gọn để thu thập triệu chứng, thời gian, mức độ nghiêm trọng hoặc bối cảnh."
+            "Nếu có thể, hãy kết luận nhanh và chỉ hỏi lại khi thật sự cần thiết."
         )
         response = self.llm.generate(prompt=prompt)
         content = response.get("content", "Vui lòng cho tôi biết thêm về tình trạng của bạn.")
@@ -204,12 +224,19 @@ class EnhancedAgent:
     def run(self, user_input: str) -> str:
         logger.log_event("ENHANCED_AGENT_START", {"input": user_input[:120]})
         self.user_history.append(user_input)
+        logger.log_event("ENHANCED_AGENT_STEP", {"input_preview": user_input[:200]})
 
         if not self._classify_medical_question(user_input):
             logger.log_event("ENHANCED_AGENT_GENERAL_MODE", {})
             return self._general_mode(user_input)
 
         self.observations = self._search_observations(user_input)
+
+        if self.observations:
+            answer = self._predict_node(user_input, self.observations)
+            logger.log_event("ENHANCED_AGENT_PREDICT_FROM_TOOL", {})
+            return answer
+
         if self._has_sufficient_information(user_input, self.observations):
             answer = self._predict_node(user_input, self.observations)
             logger.log_event("ENHANCED_AGENT_PREDICT", {})
