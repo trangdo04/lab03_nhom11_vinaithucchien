@@ -244,9 +244,7 @@ Please help the user with their medical question. Follow the Thought-Action-Obse
         if final_answer is None:
             final_answer = "I encountered an issue generating a response. Please try again or provide more details."
         
-        # Add assistant response to history
-        self.history.add_message("assistant", final_answer)
-        
+        # Do not save assistant responses to history to reduce token usage
         logger.log_event("AGENT_END", {
             "steps": step,
             "answer_length": len(final_answer),
