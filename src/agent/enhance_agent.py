@@ -130,64 +130,23 @@ class EnhancedAgent:
         lowered = user_input.lower()
         return any(term in lowered for term in medical_terms)
 
-    def _is_sensitive_or_harmful(self, user_input: str, is_medical: bool) -> bool:
-        if is_medical:
-            prompt = (
-                "Bạn là bộ lọc an toàn cho câu hỏi y tế. Xác định xem câu hỏi này có yêu cầu hành vi nguy hiểm, "
-                "tự làm hại, tự chế thuốc, hay hướng dẫn gây tổn hại cho người khác hay không.\n"
-                "Chỉ đánh giá nếu câu hỏi yêu cầu thực hiện điều nguy hiểm.\n"
-                "Trả về JSON hợp lệ gồm:\n"
-                "{\"unsafe\": true/false, \"reason\": \"...\"}.\n"
-                f"Câu hỏi của người dùng: {user_input}\n"
-                "Chỉ cung cấp JSON hợp lệ."
-            )
-        else:
-            prompt = (
-                "Bạn là bộ lọc nội dung an toàn. Xác định xem câu hỏi của người dùng có nhạy cảm, "
-                "vi phạm tiêu chuẩn cộng đồng, hoặc có thể gây nguy hiểm nếu trả lời hay không.\n"
-                "Trả về JSON hợp lệ gồm:\n"
-                "{\"unsafe\": true/false, \"reason\": \"...\"}.\n"
-                f"Câu hỏi của người dùng: {user_input}\n"
-                "Chỉ cung cấp JSON hợp lệ."
-            )
-        response = self.llm.generate(prompt=prompt)
-        content = response.get("content", "")
-        unsafe_flag = self._parse_json_flag(content, "unsafe")
-        if isinstance(unsafe_flag, bool):
-            return unsafe_flag
-        lowered = user_input.lower()
-        dangerous_terms = ["tự tử", "tự sát", "sử dụng ma túy", "bạo lực", "tấn công", "tự chế thuốc", "hủy hoại", "gây tổn hại"]
-        return any(term in lowered for term in dangerous_terms)
-
     def _general_mode(self, user_input: str) -> str:
+        if "general_searching" in self.tools:
+            result = self.tools["general_searching"].execute(user_input)
+            logger.log_event("ENHANCED_GENERAL_SEARCH", {
+                "query": user_input,
+                "status": result.get("status"),
+                "data_preview": str(result.get("data") or result.get("answer"))[:300],
+                "message": result.get("message")
+            })
+            if result.get("status") == "success" and (result.get("data") or result.get("answer")):
+                return self._format_tool_response(result)
         prompt = (
-            "Bạn là trợ lý chung. Hãy trả lời câu hỏi này rõ ràng, dễ hiểu và ngắn gọn.\n"
+            "Bạn là trợ lý chung. Hãy trả lời câu hỏi này rõ ràng và ngắn gọn.\n"
             f"Câu hỏi của người dùng: {user_input}"
         )
         response = self.llm.generate(prompt=prompt)
         return response.get("content", "Xin lỗi, tôi không thể trả lời câu hỏi này.")
-
-    def _ground_tool_response(self, user_input: str, result: Dict[str, Any]) -> str:
-        tool_output = result.get("data") or result.get("answer")
-        if not tool_output:
-            return ""
-
-        content_snippet = tool_output
-        if isinstance(tool_output, list):
-            content_snippet = json.dumps(tool_output, ensure_ascii=False)
-        elif isinstance(tool_output, dict):
-            content_snippet = json.dumps(tool_output, ensure_ascii=False)
-
-        prompt = (
-            "Bạn là trợ lý y tế. Dưới đây là kết quả tìm kiếm thông tin y tế thô từ công cụ hỗ trợ. "
-            "Hãy chuyển thành câu trả lời tiếng Việt dễ đọc, ngắn gọn, thân thiện và giữ nguyên nội dung chính. "
-            "Nếu không tìm thấy thông tin rõ ràng, hãy nói rằng không có đủ dữ liệu.\n\n"
-            f"Câu hỏi của người dùng: {user_input}\n"
-            f"Kết quả công cụ: {content_snippet}\n"
-            "Trả lời bằng một đoạn văn ngắn, không ghi lại cấu trúc JSON."
-        )
-        response = self.llm.generate(prompt=prompt)
-        return response.get("content", "")
 
     def _search_observations(self, user_input: str) -> List[str]:
         collected: List[str] = []
@@ -219,12 +178,12 @@ class EnhancedAgent:
 
     def _has_sufficient_information(self, user_input: str, observations: List[str]) -> bool:
         prompt = (
-            "Bạn là trợ lý y tế. Hãy xác định xem thông tin hiện có có đủ để đưa ra một nhận định về tên bệnh lý khả dĩ hay không.\n"
+            "Bạn là trợ lý y tế. Hãy xác định xem thông tin hiện có có đủ để đưa ra gợi ý y tế thận trọng hay không.\n"
             "Nếu có thể, hãy ưu tiên kết luận thận trọng thay vì tiếp tục hỏi thêm.\n"
             "Chỉ trả lời YES hoặc NO.\n"
             f"Câu hỏi của người dùng: {user_input}\n"
             f"Các quan sát:\n{chr(10).join(observations)}\n"
-            "Có đủ thông tin để đề xuất một tên bệnh lý khả dĩ không?"
+            "Có đủ thông tin để đưa ra gợi ý y tế không?"
         )
         response = self.llm.generate(prompt=prompt)
         content = response.get("content", "").strip().lower()
@@ -240,12 +199,11 @@ class EnhancedAgent:
 
     def _predict_node(self, user_input: str, observations: List[str]) -> str:
         prompt = (
-            "Bạn là trợ lý y tế. Dùng câu hỏi và các quan sát sau để đưa ra một nhận định tên bệnh lý khả dĩ nhất. "
-            "Trả lời ngắn gọn, chỉ nêu tên bệnh lý chính hoặc các khả năng hàng đầu. "
-            "Kèm theo một câu rất ngắn cảnh báo rằng đây không phải là chẩn đoán chính thức.\n\n"
+            "Bạn là trợ lý y tế. Dùng câu hỏi và các quan sát sau để cung cấp câu trả lời cẩn trọng, ngắn gọn và kết luận nhanh. "
+            "Hãy rõ ràng rằng đây không phải là tư vấn y tế chính thức và khuyến nghị tham khảo chuyên gia nếu cần.\n\n"
             f"Câu hỏi của người dùng: {user_input}\n"
             f"Các quan sát:\n{chr(10).join(observations)}\n"
-            "Trả lời bằng tên bệnh lý hoặc các khả năng chính."
+            "Trả lời ngắn gọn, thân thiện và đúng mực."
         )
         response = self.llm.generate(prompt=prompt)
         return response.get("content", "Tôi không thể xác định được thông tin vào lúc này.")
@@ -268,16 +226,7 @@ class EnhancedAgent:
         self.user_history.append(user_input)
         logger.log_event("ENHANCED_AGENT_STEP", {"input_preview": user_input[:200]})
 
-        is_medical = self._classify_medical_question(user_input)
-
-        if self._is_sensitive_or_harmful(user_input, is_medical=is_medical):
-            logger.log_event("ENHANCED_AGENT_SAFETY_BLOCK", {"medical_question": is_medical})
-            return (
-                "Xin lỗi, tôi không thể trả lời câu hỏi này do liên quan đến nội dung nhạy cảm hoặc yêu cầu hành vi nguy hiểm. "
-                "Vui lòng hỏi điều gì khác hoặc tìm nguồn tư vấn an toàn."
-            )
-
-        if not is_medical:
+        if not self._classify_medical_question(user_input):
             logger.log_event("ENHANCED_AGENT_GENERAL_MODE", {})
             return self._general_mode(user_input)
 
