@@ -115,6 +115,3 @@ Ngoài ra, `EnhancedAgent` bổ sung flow nâng cao:
 
 ---
 
-**Note**
-
-Nộp báo cáo này bằng cách đổi tên file thành `GROUP_REPORT_[TEN_NHOM].md` và đặt vào thư mục này.
