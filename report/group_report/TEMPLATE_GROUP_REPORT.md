@@ -2,7 +2,7 @@
 
 - **Tên nhóm**: Nhóm 11
 - **Thành viên:**
-  - Nguyễn Bằng Anh - 2A2026000136
+  - Nguyễn Bằng Anh - 2A202600136
   - Đỗ Thị Thùy Trang - 2A202600041
   - Bùi Trọng Anh - 2A202600010
   - Nguyễn Thị Thanh Huyền - 2A202600211
